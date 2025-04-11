@@ -6,4 +6,4 @@ Requirements:
 - Retrieve your API KEY and create an environment variable
 - Use pip to install the "google" and "google-genai" libraries
 - 
-- Virustotal stuff
+- VirusTotal stuff
