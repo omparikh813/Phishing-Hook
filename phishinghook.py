@@ -4,6 +4,7 @@ import base64
 import os
 from google import genai
 from google.genai import types
+import vt
 
 
 #Gathering User Insight
@@ -12,16 +13,24 @@ print("""Hello user, we will need to gather some insight into your malicious sit
       Type not sure if there is no clear answer. """)
 
 persona = input("Who are you? (Ex: Student, Job Position, etc.): ")
-value = input("What potentially valuable information do you hold? (Passwords, Access, Corporate Secrets, etc.): ")
+values = input("What potentially valuable information do you hold? (Passwords, Money, Corporate Secrets, etc.): ")
 vectors = input("How could an attacker have found you? (Public Relations, Compromised Email, Website Sign-Ups): )")
 
-#Virus Total Assesment
 email = input("Now enter the suspected email, including any webpage links attached: ")
 
 #Parse input for attachments and plug them into virustotal, add score into prompt
 
+
+
+#Virus Total Assessment
+client = vt.Client(os.environ.get("VT_API_KEY"))
+
 #Creating prompt for comprehensive analysis
-prompt = """nothing so far..."""
+prompt = """I am a {} who has recently recieved an email that I suspect of malicious intent. 
+I hold {}, which are potentially valuable to attackers. If the email was of malicious intent, 
+the attacker might have reached me from {}. Please analyze the email in a single concise pargraph,
+and determine if it is likely of malicious intent, or if it is safe to interact with.
+The email is attached below. \n {}""".format(persona, values, vectors, email)
 
 
 
