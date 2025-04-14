@@ -51,14 +51,15 @@ while True:
 result, data = imap_server.fetch(message_id, 'RFC822')
 raw_email = data[0][1].decode('utf-8')
 
-#Closes server when data is retrieved
+#Deletes email sent by user and closes server
+imap_server.store(message_id, '+FLAGS', '\\Deleted')
 imap_server.close()
 
 #Converts email into Email object
 msg = parser.Parser(policy=default).parsestr(raw_email)
-forwarded_msg = msg.get_payload()[0].get_payload()
 
 #Parse email for attachments andsuspected threat actor
+forwarded_msg = msg.get_payload()[0].get_payload()
 from_email = re.search(r'From: .* <([\w\.]*@\w*\.\w*)>', forwarded_msg)
 links = re.findall(r'https?://[\w.]*', forwarded_msg)
 links = list(set(links))
