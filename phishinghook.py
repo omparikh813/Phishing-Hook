@@ -58,18 +58,28 @@ imap_server.close()
 #Converts email into Email object
 msg = parser.Parser(policy=default).parsestr(raw_email)
 
-#Parse email for attachments andsuspected threat actor
+#Parse email for attachments and suspected threat actor
 forwarded_msg = msg.get_payload()[0].get_payload()
 from_email = re.search(r'From: .* <([\w\.]*@\w*\.\w*)>', forwarded_msg)
 links = re.findall(r'https?://[\w.]*', forwarded_msg)
 links = list(set(links))
 
-print(links)
 
-#Virus Total Assessment
+#VirusTotal Assessment
 client = vt.Client(os.environ.get("VT_API_KEY"))
 
+#Gathers the analysis stats from each url 
+reviews = []
+for link in links:
+    #Converts url to acceptable format and gets analysis stats
+    url_id = vt.url_id(link)
+    url = client.get_object("/urls/{}".format(url_id))
+    reviews.append(url.last_analysis_stats)
 
+#Closes client
+client.close()
+
+print(reviews)
 
 #Creating prompt for comprehensive analysis
 user_insight = ""
