@@ -2,8 +2,7 @@
 
 import base64
 import os
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 import vt
 import imaplib
 import re
@@ -24,7 +23,7 @@ imap_server=imaplib.IMAP4_SSL('imap.gmail.com')
 imap_server.login('local.lock.app@gmail.com', os.environ.get('EMAIL_PASSWORD'))
 
 #Starts time to find email
-print('Waiting for forwarded email...')
+print('Waiting for forwarded email...\n')
 start_time = time.time()
 
 #Loops until email is found
@@ -76,50 +75,28 @@ for link in links:
     url = client.get_object("/urls/{}".format(url_id))
     reviews.append(url.last_analysis_stats)
 
-#Closes client
+#Closes VirusTotal client
 client.close()
 
-print(reviews)
+#Configure Gemini
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 #Creating prompt for comprehensive analysis
-user_insight = ""
+user_insight = user_analysis = """
+    Using the email "{}", analyze the name and domain to determine who they are (ex. personal, corporate account, etc.), 
+    potentially valuable assets (ex. passwords, capital, corporate secrets or access, etc.), 
+    and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.) 
+    and create a sequence of the three items. Ensure each point of analysis is under 40 words long. 
+    The only output should be as follows: "persona: ", "assets: ", "attack vectors: "
+    """.format(email)
 
+# Generate content
+response = model.generate_content(user_analysis)
+print(response.text)
 
 # prompt = """I am a {} who has recently recieved an email that I suspect of malicious intent. 
 # I hold {}, which are potentially valuable to attackers. If the email was of malicious intent, 
 # the attacker might have reached me from {}. Please analyze the email in a single concise pargraph,
 # and determine if it is likely of malicious intent, or if it is safe to interact with.
 # The email is attached below. \n {}""".format(persona, values, vectors, email)
-
-
-
-#Defines scope of gemini and inputs prompt
-def generate(prompt):
-    client = genai.Client(
-        api_key=os.environ.get("GEMINI_API_KEY"),
-    )
-
-    model = "gemini-2.0-flash"
-    contents = [
-        types.Content(
-            role="user",
-            parts=[
-                types.Part.from_text(text=prompt),
-            ],
-        ),
-    ]
-    generate_content_config = types.GenerateContentConfig(
-        response_mime_type="text/plain",
-    )
-
-    for chunk in client.models.generate_content_stream(
-        model=model,
-        contents=contents,
-        config=generate_content_config,
-    ):
-        print(chunk.text, end="")
-
-#Executes text generation
-if __name__ == "__main__":
-    #generate("No prompt yet, just testing")
-    pass
