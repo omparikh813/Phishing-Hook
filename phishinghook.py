@@ -83,20 +83,20 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-2.0-flash')
 
 #Creating prompt for comprehensive analysis
-user_insight = user_analysis = """
-    Using the email "{}", analyze the name and domain to determine who they are (ex. personal, corporate account, etc.), 
-    potentially valuable assets (ex. passwords, capital, corporate secrets or access, etc.), 
-    and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.) 
-    and create a sequence of the three items. Ensure each point of analysis is under 40 words long. 
-    The only output should be as follows: "persona: ", "assets: ", "attack vectors: "
-    """.format(email)
+prompt = """
+    Using the email "{}", analyze the name and domain to determine who they are (ex. personal, corporate account, etc.). 
+    This is the receiver of the email. Then determine their potentially valuable assets (ex. passwords, capital, corporate secrets or access, etc.), 
+    and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.). 
+    This email address had an email sent to them which they suspect of being a phishing email. The suspected email is attached to the end of this prompt, with the sender being "{}".
+    Keep in mind that the sender could be an automated account of a legit website. Use the analsis of the reciever(persona, assets, attack vectors), the following email contents, 
+    and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. 
+    Provide the analysis in only one concise paragraph, highlighting major signs of phishing and an overall score out of 100 with 0 being no malicious intent to 100 being a certain phishing attempt.
+
+    Email Contents: "{}"
+    VirusTotal Analysis: "{}"
+
+    """.format(email, from_email, forwarded_msg, str(reviews))
 
 # Generate content
-response = model.generate_content(user_analysis)
+response = model.generate_content(prompt)
 print(response.text)
-
-# prompt = """I am a {} who has recently recieved an email that I suspect of malicious intent. 
-# I hold {}, which are potentially valuable to attackers. If the email was of malicious intent, 
-# the attacker might have reached me from {}. Please analyze the email in a single concise pargraph,
-# and determine if it is likely of malicious intent, or if it is safe to interact with.
-# The email is attached below. \n {}""".format(persona, values, vectors, email)
