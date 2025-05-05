@@ -57,8 +57,11 @@ imap_server.close()
 #Converts email into Email object
 msg = parser.Parser(policy=default).parsestr(raw_email)
 
-#Parse email for attachments and suspected threat actor
+#Retrieves payload of message and removes encoding from embedded text to not confuse AI
 forwarded_msg = msg.get_payload()[0].get_payload()
+forwarded_msg = re.sub(r"=\w{1,2}", "", forwarded_msg)
+
+#Parse email for attachments and suspected threat actor
 from_email = re.search(r'From: .* <([\w\.]*@\w*\.\w*)>', forwarded_msg)
 links = re.findall(r'https?://[\w.]*', forwarded_msg)
 links = list(set(links))
@@ -88,15 +91,17 @@ prompt = """
     This is the receiver of the email. Then determine their potentially valuable assets (ex. passwords, capital, corporate secrets or access, etc.), 
     and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.). 
     This email address had an email sent to them which they suspect of being a phishing email. The suspected email is attached to the end of this prompt, with the sender being "{}".
-    Keep in mind that the sender could be an automated account of a legit website. Use the analsis of the reciever(persona, assets, attack vectors), the following email contents, 
+    Keep in mind that the sender could be an automated account of a legit website. Use the analsis of the reciever (persona, assets, attack vectors), the following email contents, 
     and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. 
-    Provide the analysis in only one concise paragraph, highlighting major signs of phishing and an overall score out of 100 with 0 being no malicious intent to 100 being a certain phishing attempt.
+    The report should be in one concise, 5 sentence pargraph, and include a score from 0 to 100 with 0 being no likely phishing attempt and 100 being a definite threat.
 
     Email Contents: "{}"
     VirusTotal Analysis: "{}"
 
     """.format(email, from_email, forwarded_msg, str(reviews))
 
-# Generate content
+# Generates report
 response = model.generate_content(prompt)
 print(response.text)
+
+quit()
