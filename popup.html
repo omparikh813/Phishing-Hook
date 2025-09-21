@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Phishing Hook</title>
+    <style>
+      body { font-family: Arial, sans-serif; width: 320px; padding: 12px; }
+      h3 { margin: 6px 0; font-size: 16px; }
+      #status { font-size: 13px; margin-bottom: 8px; color: #333; }
+      #result { white-space: pre-wrap; margin-top: 8px; border: 1px solid #ddd; padding: 8px; border-radius: 6px; min-height: 60px; }
+      button { padding: 8px 12px; border-radius: 6px; border: none; background: #0b66ff; color: white; cursor: pointer; }
+      button:disabled { background: #9dbfff; cursor: not-allowed; }
+      .small { font-size: 12px; color: #666; margin-top:6px; }
+    </style>
+  </head>
+  <body>
+    <h3>Phishing Hook — Gmail Scanner</h3>
+    <div id="status">Open a Gmail message, then click <b>Scan Email</b>.</div>
+    <button id="scanBtn">Scan Email</button>
+    <div class="small">Backend URL (dev): <input id="backendUrl" placeholder="http://localhost:5000/scan" style="width: 100%"/></div>
+    <div id="result"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
