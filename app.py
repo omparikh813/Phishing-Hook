@@ -110,29 +110,31 @@ def scan():
     # VirusTotal checks (if possible)
     vt_reviews = vt_check_links(links)
 
-    # Compose prompt asking for structured JSON output (score, digest, reasons)
-    prompt = f"""
-You are a helpful email security assistant. The receiver is "{sender_email or sender}".
-Given the email subject and contents and the VirusTotal link analysis below, produce a JSON object with keys:
-- digest: a concise 1-paragraph summary (approx 3-5 sentences)
-- score: integer 0-100 (0 = safe, 100 = definite phishing)
-- reasons: array of short reasons/indicators (e.g. "suspicious link", "attachment flagged", "spoofed sender")
-Do not include any other keys.
+    # Use sender_email if present, else sender
+    receiver_email = sender_email or sender
 
-Subject: "{subject}"
-Email Text: {json.dumps(text)}
-Links: {json.dumps(links)}
-VirusTotal: {json.dumps(vt_reviews)}
+    # --- NEW PROMPT ---
+    prompt = f"""
+Using the email "{receiver_email}", analyze the name and domain to determine who they are (ex. personal, corporate account, etc.). 
+This is the receiver of the email. Then determine their potentially valuable assets (ex. passwords, capital, corporate secrets or access, etc.), 
+and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.). 
+This email address had an email sent to them which they suspect of being a phishing email. The suspected email is attached to the end of this prompt, with the sender being "{sender_email or sender}".
+Keep in mind that the sender could be an automated account of a legit website, such as coorperations like Google, Github, Amazon. etc. Use the analysis of the receiver (persona, assets, attack vectors), the following email contents, 
+and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. 
+The report should be in one concise, 5 sentence paragraph, and include a score from 0 to 100 with 0 being no likely phishing attempt and 100 being a definite threat.
+
+Email Contents: {json.dumps(text)}
+VirusTotal Analysis: {json.dumps(vt_reviews)}
 """
 
+    # Call Gemini
     ai_text = call_gemini_prompt(prompt)
 
-    # Attempt to parse JSON out of ai_text (model may return plain text)
+    # Attempt to parse score from text
     digest = ai_text
     score = None
     reasons = []
 
-    # crude attempt: find a trailing integer score in the text
     m = re.search(r'(\b[0-9]{1,3}\b)(?=\s*(?:$|%|score))', ai_text)
     if m:
         try:
@@ -141,13 +143,13 @@ VirusTotal: {json.dumps(vt_reviews)}
         except Exception:
             score = None
 
-    # Heuristic fallback when Gemini not present or didn't return score
+    # Heuristic fallback
     if score is None:
         malicious_hits = 0
         for r in vt_reviews:
             stats = r.get("last_analysis_stats") or {}
             malicious_hits += stats.get("malicious", 0) + stats.get("suspicious", 0)
-        # simple mapping
+
         if malicious_hits == 0:
             score = 15
             reasons.append("no VirusTotal malicious hits")
@@ -158,15 +160,14 @@ VirusTotal: {json.dumps(vt_reviews)}
             score = 90
             reasons.append("multiple VirusTotal engines flagged links")
 
-        # Add heuristics for suspicious words
+        # Suspicious word heuristics
         suspicious_words = ["verify", "password", "account", "login", "urgent", "verify your", "confirm"]
         if any(w in text.lower() for w in suspicious_words):
             reasons.append("suspicious wording (request for credentials / urgent action)")
 
-        # domain mismatch heuristic
+        # Domain mismatch heuristic
         domains = extract_domains_from_links(links)
         if domains and sender_email:
-            # compare sender domain to link domains
             sender_domain = ""
             m2 = re.search(r"@([^\s>]+)", sender_email)
             if m2:
@@ -175,11 +176,10 @@ VirusTotal: {json.dumps(vt_reviews)}
             if mismatch:
                 reasons.append("sender domain does not match link domain(s)")
 
-    # Ensure reasons is not empty
     if not reasons:
         reasons = ["heuristic: no obvious indicators detected"]
 
-    # Final result: try to present the Gemini digest if available, else fallback
+    # Final result
     result = {
         "digest": ai_text,
         "score": score,

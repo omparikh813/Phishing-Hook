@@ -1,102 +1,101 @@
-// popup.js
 const scanBtn = document.getElementById("scanBtn");
-const statusEl = document.getElementById("status") || document.createElement("div");
-const resultEl = document.getElementById("result") || document.createElement("div");
+const statusEl = document.getElementById("status");
+const resultEl = document.getElementById("result");
+const scoreEl = document.getElementById("score");
 const backendInput = document.getElementById("backendUrl");
 
 const DEFAULT_BACKEND = "http://localhost:5000/scan";
-if (backendInput) backendInput.value = localStorage.getItem("ph_backend") || DEFAULT_BACKEND;
 
+// Initialize backend input if present
+if (backendInput) backendInput.value = localStorage.getItem("ph_backend") || DEFAULT_BACKEND;
 if (backendInput) {
   backendInput.addEventListener("change", () => {
     localStorage.setItem("ph_backend", backendInput.value);
   });
 }
 
-function setStatus(msg) {
-  if (statusEl) statusEl.innerText = msg;
+// UI helper functions
+function setStatus(msg) { statusEl.innerText = msg; }
+function setResult(msg) { resultEl.innerText = msg; }
+function setScore(value) {
+  scoreEl.innerText = value;
+  let color = "#999"; // neutral
+  if (value >= 75) color = "#d93025"; // red
+  else if (value >= 40) color = "#f9ab00"; // yellow
+  else color = "#34a853"; // green
+  scoreEl.style.backgroundColor = color;
 }
 
-function setResult(msg) {
-  if (resultEl) resultEl.innerText = msg;
+// Send message to content script
+async function extractEmail(tabId) {
+  return chrome.tabs.sendMessage(tabId, { action: "getEmailContent" });
 }
 
-// Main click handler
+// Fallback extraction if content script fails
+async function fallbackExtraction(tabId) {
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      try {
+        if (window.__phishingHook && window.__phishingHook.buildEmailPayload) {
+          return window.__phishingHook.buildEmailPayload();
+        } else {
+          const subj = document.querySelector("h2.hP") || document.querySelector("h2");
+          const from = document.querySelector(".gD") || document.querySelector(".go");
+          const body = document.querySelector("div.a3s");
+          const html = body ? body.innerHTML : "";
+          const text = body ? body.innerText : "";
+          const links = Array.from((body && body.querySelectorAll) ? body.querySelectorAll("a[href]") : []).map(a => a.href);
+          return {
+            subject: subj ? subj.innerText : "",
+            sender: from ? (from.getAttribute("email") || from.innerText) : "",
+            senderEmail: from ? (from.getAttribute("email") || "") : "",
+            text,
+            html,
+            links
+          };
+        }
+      } catch (e) {
+        return { error: "Fallback extraction failed: " + String(e) };
+      }
+    }
+  });
+  return results && results[0] && results[0].result;
+}
+
+// Main scan click handler
 scanBtn.addEventListener("click", async () => {
-  setStatus("Extracting email from page...");
+  setStatus("Extracting email...");
   setResult("");
+  setScore("--");
   scanBtn.disabled = true;
 
   try {
-    // find active tab in current window
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) throw new Error("No active tab found");
 
-    if (!tab) throw new Error("No active tab found.");
-
-    // Send a message to the content script to extract the email. Content script must be injected via manifest.
-    const response = await chrome.tabs.sendMessage(tab.id, { action: "getEmailContent" });
-
-    // If sendMessage returns undefined (e.g., content script not injected), fallback to executeScript
-    let emailData = response;
+    // Try content script first
+    let emailData = await extractEmail(tab.id);
     if (!emailData) {
-      // fallback: execute script to call the exposed builder (less preferred)
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => {
-          // This runs in page context; try to use exposed helper
-          try {
-            if (window.__phishingHook && window.__phishingHook.buildEmailPayload) {
-              return window.__phishingHook.buildEmailPayload();
-            } else {
-              // naive fallback - attempt to find main selectors
-              const subj = document.querySelector("h2.hP") || document.querySelector("h2");
-              const from = document.querySelector(".gD") || document.querySelector(".go");
-              const body = document.querySelector("div.a3s");
-              const html = body ? body.innerHTML : "";
-              const text = body ? body.innerText : "";
-              return {
-                subject: subj ? subj.innerText : "",
-                sender: from ? (from.getAttribute("email") || from.innerText) : "",
-                senderEmail: from ? (from.getAttribute("email") || "") : "",
-                text,
-                html,
-                links: Array.from((body && body.querySelectorAll) ? body.querySelectorAll("a[href]") : []).map(a => a.href)
-              };
-            }
-          } catch (e) {
-            return { error: "Extraction fallback failed: " + String(e) };
-          }
-        }
-      });
-      emailData = results && results[0] && results[0].result;
+      setStatus("Content script not responding, using fallback...");
+      emailData = await fallbackExtraction(tab.id);
     }
 
-    if (!emailData) throw new Error("No email data returned from content script.");
-
-    if (emailData.error) {
-      setStatus("Error extracting email");
-      setResult(emailData.error);
+    if (!emailData || emailData.error) {
+      setStatus("Extraction failed");
+      setResult(emailData ? emailData.error : "Unknown error");
       scanBtn.disabled = false;
       return;
     }
 
-    setStatus("Sending email to backend for analysis...");
+    setStatus("Analyzing email...");
 
     const backendUrl = (backendInput && backendInput.value.trim()) || localStorage.getItem("ph_backend") || DEFAULT_BACKEND;
-
-    const payload = {
-      subject: emailData.subject || "",
-      sender: emailData.sender || "",
-      senderEmail: emailData.senderEmail || "",
-      text: emailData.text || "",
-      html: emailData.html || "",
-      links: emailData.links || []
-    };
 
     const res = await fetch(backendUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(emailData)
     });
 
     if (!res.ok) {
@@ -106,21 +105,25 @@ scanBtn.addEventListener("click", async () => {
 
     const json = await res.json();
     setStatus("Analysis complete");
-    // Display structured output if available
-    if (json.digest || json.score || json.reasons) {
+
+    // Display structured output
+    if (json.digest || json.score !== undefined || json.reasons) {
       let out = "";
       if (json.digest) out += `Digest:\n${json.digest}\n\n`;
       if (json.score !== undefined) out += `Score: ${json.score}\n\n`;
       if (json.reasons && Array.isArray(json.reasons)) out += `Reasons:\n- ${json.reasons.join("\n- ")}\n\n`;
       if (json.explain) out += `Details: ${json.explain}\n`;
       setResult(out);
+      setScore(json.score !== undefined ? json.score : "--");
     } else {
       setResult(JSON.stringify(json, null, 2));
+      setScore("--");
     }
   } catch (err) {
     console.error("Scan error:", err);
     setStatus("Error");
-    setResult("Failed to reach backend or extract message. See console for details.\n\n" + String(err));
+    setResult(err.message || "Failed to reach backend or extract message");
+    setScore("--");
   } finally {
     scanBtn.disabled = false;
   }
