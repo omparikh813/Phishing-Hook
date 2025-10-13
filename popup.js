@@ -103,22 +103,11 @@ scanBtn.addEventListener("click", async () => {
       throw new Error(`Server responded ${res.status} ${txt}`);
     }
 
-    const json = await res.json();
+    const data = await res.json();
+    setResult(data.result);
+    setScore(data.score !== undefined ? data.score : "--");
     setStatus("Analysis complete");
 
-    // Display structured output
-    if (json.digest || json.score !== undefined || json.reasons) {
-      let out = "";
-      if (json.digest) out += `Digest:\n${json.digest}\n\n`;
-      if (json.score !== undefined) out += `Score: ${json.score}\n\n`;
-      if (json.reasons && Array.isArray(json.reasons)) out += `Reasons:\n- ${json.reasons.join("\n- ")}\n\n`;
-      if (json.explain) out += `Details: ${json.explain}\n`;
-      setResult(out);
-      setScore(json.score !== undefined ? json.score : "--");
-    } else {
-      setResult(JSON.stringify(json, null, 2));
-      setScore("--");
-    }
   } catch (err) {
     console.error("Scan error:", err);
     setStatus("Error");
