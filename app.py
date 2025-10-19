@@ -90,6 +90,7 @@ def scan():
 
     # VirusTotal analysis with submission for new links
     vt_reviews = vt_check_links(links)
+    vt_reviews = [r for r in vt_reviews if not ('error' in r and 'NotFoundError' in r['error'])]
 
     receiver_email = sender_email or sender
 
@@ -100,7 +101,7 @@ This is the receiver of the email. Then determine their potentially valuable ass
 and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.). 
 This email address had an email sent to them which they suspect of being a phishing email. The suspected email is attached to the end of this prompt, with the sender being "{sender_email or sender}".
 Keep in mind that the sender could be an automated account of a legit website, such as corporations like Google, Github, Amazon, etc. Use the analysis of the receiver (persona, assets, attack vectors), the following email contents, 
-and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. 
+and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. A link should only be considered malicious if more than 10% of vendors report it as suspicious or malicious.
 
 Email Contents: {json.dumps(text)}
 VirusTotal Analysis: {json.dumps(vt_reviews)}
