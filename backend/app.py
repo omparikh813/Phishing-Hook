@@ -6,6 +6,8 @@ import time
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 from dotenv import load_dotenv
+from google import genai
+import vt
 
 load_dotenv()
 
