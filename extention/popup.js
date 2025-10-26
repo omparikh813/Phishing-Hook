@@ -4,7 +4,7 @@ const resultEl = document.getElementById("result");
 const scoreEl = document.getElementById("score");
 const backendInput = document.getElementById("backendUrl");
 
-const DEFAULT_BACKEND = "http://127.0.0.1:5000/scan";
+const DEFAULT_BACKEND = "https://phishing-hook.onrender.com/scan";
 
 // Initialize backend input
 if (backendInput) backendInput.value = localStorage.getItem("ph_backend") || DEFAULT_BACKEND;
