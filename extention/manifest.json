@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Phishing Hook - Gmail Scanner",
+  "name": "Phishing Hook",
   "description": "Scan the currently-open Gmail message and get a concise phishing digest.",
   "version": "1.0",
   "permissions": [
