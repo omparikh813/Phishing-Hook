@@ -117,17 +117,22 @@ def scan():
     # --- Gemini prompt ---
     prompt = f"""
 Using the email "{receiver_email}", analyze the name and domain to determine who they are (ex. personal, corporate account, etc.). 
-Then determine their potentially valuable assets and possible attack vectors. The email contents and VirusTotal analysis are provided below.
-A link should only be considered malicious if more than 10% of vendors report it as suspicious or malicious.
+This is the receiver of the email. Then determine their potentially valuable assets (ex. passwords, capital, corporate secrets or access, etc.), 
+and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.). 
+This email address had an email sent to them which they suspect of being a phishing email. The suspected email is attached to the end of this prompt, with the sender being "{sender_email or sender}".
+Keep in mind that the sender could be an automated account of a legit website, such as corporations like Google, Github, Amazon, etc. Use the analysis of the receiver (persona, assets, attack vectors), the following email contents, 
+and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. 
+and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. A link should only be considered malicious if more than 10% of vendors report it as suspicious or malicious.
 
 Email Contents: {json.dumps(text)}
 VirusTotal Analysis: {json.dumps(vt_reviews)}
 
-Output format:
-Score: [0–100]
-Digest: [3 sentences]
-Reasons: [2 major reasons]
-"""
+The Output should be formatted as such with no additional text:
+Score: [a score from 0 to 100 with 0 being no likely phishing attempt and 100 being a definite threat.]
+
+Digest: [3 sentence summary]
+
+Reasons: [2 major reasons for the score, 1 sentence explaining each one]"""
 
     ai_text = call_gemini_prompt(prompt)
 

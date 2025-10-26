@@ -81,6 +81,15 @@ scanBtn.addEventListener("click", async () => {
       throw new Error("Not a Gmail tab. Open a Gmail message to scan.");
     }
 
+    // New check for Gmail inbox view
+    if (tab.url && tab.url.includes("https://mail.google.com/mail/u/") && tab.url.endsWith("/#inbox")) {
+      setStatus("Please click on a specific email to scan.");
+      setResult("No email selected.");
+      setScore("--");
+      scanBtn.disabled = false;
+      return;
+    }
+
     // Extract email content
     let emailData = await extractEmail(tab.id);
     if (!emailData || emailData.error) {
