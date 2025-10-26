@@ -3,18 +3,28 @@ import os
 import re
 import json
 import time
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # dev: allow all origins
 
+# --- Environment Setup ---
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 VT_API_KEY = os.environ.get("VT_API_KEY")
+EXTENSION_ORIGIN = os.environ.get("CHROME_EXTENSION_ORIGIN")  # e.g. chrome-extension://abcdefghijklmnop
 
+# --- CORS Setup ---
+# In production: restrict to Chrome Extension origin
+# In local dev: allow localhost access
+if EXTENSION_ORIGIN:
+    CORS(app, origins=[EXTENSION_ORIGIN])
+else:
+    CORS(app, origins=["http://127.0.0.1:5000", "http://localhost:5000"])
+
+# --- Optional Imports ---
 try:
     import google.generativeai as genai
     if GEMINI_API_KEY:
@@ -28,6 +38,7 @@ except Exception:
     vt = None
 
 
+# --- VirusTotal Link Check ---
 def vt_check_links(links):
     """Return summary list for each link; submit unscanned links for analysis."""
     if not links:
@@ -48,7 +59,6 @@ def vt_check_links(links):
                 # Link not found, submit for analysis
                 try:
                     submission = client.scan_url(link)
-                    # We can optionally wait briefly for the scan to complete
                     time.sleep(1)
                     obj = client.get_object(f"/urls/{vt.url_id(link)}")
                     reviews.append({"link": link, "last_analysis_stats": getattr(obj, "last_analysis_stats", {})})
@@ -61,6 +71,7 @@ def vt_check_links(links):
     return reviews
 
 
+# --- Gemini AI Function ---
 def call_gemini_prompt(prompt):
     if genai:
         try:
@@ -72,6 +83,7 @@ def call_gemini_prompt(prompt):
     return "Gemini not configured. Fallback analysis applied."
 
 
+# --- Routes ---
 @app.route("/", methods=["GET"])
 def index():
     return jsonify({"status": "ok", "note": "POST JSON to /scan"})
@@ -79,6 +91,12 @@ def index():
 
 @app.route("/scan", methods=["POST"])
 def scan():
+    # --- Origin Security Check ---
+    if EXTENSION_ORIGIN:
+        origin = request.headers.get("Origin")
+        if origin != EXTENSION_ORIGIN:
+            abort(403)
+
     data = request.get_json(force=True) or {}
     subject = data.get("subject", "")
     sender = data.get("sender", "")
@@ -88,7 +106,7 @@ def scan():
 
     text = re.sub(r"=\w{1,2}", "", text)
 
-    # VirusTotal analysis with submission for new links
+    # VirusTotal analysis
     vt_reviews = vt_check_links(links)
     vt_reviews = [r for r in vt_reviews if not ('error' in r and 'NotFoundError' in r['error'])]
 
@@ -97,34 +115,33 @@ def scan():
     # --- Gemini prompt ---
     prompt = f"""
 Using the email "{receiver_email}", analyze the name and domain to determine who they are (ex. personal, corporate account, etc.). 
-This is the receiver of the email. Then determine their potentially valuable assets (ex. passwords, capital, corporate secrets or access, etc.), 
-and what vectors a possible attacker could use to reach them (ex. compromised email, email list, etc.). 
-This email address had an email sent to them which they suspect of being a phishing email. The suspected email is attached to the end of this prompt, with the sender being "{sender_email or sender}".
-Keep in mind that the sender could be an automated account of a legit website, such as corporations like Google, Github, Amazon, etc. Use the analysis of the receiver (persona, assets, attack vectors), the following email contents, 
-and a list of VirusTotal reviews of the attached links to determine the likelihood of the email being a phishing attempt. A link should only be considered malicious if more than 10% of vendors report it as suspicious or malicious.
+Then determine their potentially valuable assets and possible attack vectors. The email contents and VirusTotal analysis are provided below.
+A link should only be considered malicious if more than 10% of vendors report it as suspicious or malicious.
 
 Email Contents: {json.dumps(text)}
 VirusTotal Analysis: {json.dumps(vt_reviews)}
 
-The Output should be formatted as such with no additional text:
-Score: [a score from 0 to 100 with 0 being no likely phishing attempt and 100 being a definite threat.]
-
-Digest: [3 sentence summary]
-
-Reasons: [2 major reasons for the score, 1 sentence explaining each one]
+Output format:
+Score: [0–100]
+Digest: [3 sentences]
+Reasons: [2 major reasons]
 """
 
     ai_text = call_gemini_prompt(prompt)
 
-    # Digest is raw Gemini output
-    digest_clean = re.sub(r'^Score:\s*\d{1,3}', '', ai_text, flags=re.MULTILINE)
-    digest_clean = digest_clean.strip()
+    # Clean AI output
+    digest_clean = re.sub(r'^Score:\s*\d{1,3}', '', ai_text, flags=re.MULTILINE).strip()
 
-    #Parse score from Gemini
+    # Parse score
     num = re.search(r'Score: (\d{1,3})', ai_text)
     score = int(num.group(1)) if num else "No score given"
 
     return jsonify({"result": digest_clean, "score": score})
 
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=not bool(EXTENSION_ORIGIN)  # disable debug if running in production
+    )
