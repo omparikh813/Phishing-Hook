@@ -5,8 +5,7 @@
   "version": "1.0",
   "permissions": [
     "activeTab",
-    "scripting",
-    "storage"
+    "scripting"
   ],
   "host_permissions": [
     "https://mail.google.com/*",
