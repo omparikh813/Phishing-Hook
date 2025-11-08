@@ -24,5 +24,10 @@
       "js": ["content_script.js"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "icons": {
+    "16": "phishinghook.png",
+    "48": "phishinghook.png",
+    "128": "phishinghook.png"
+  }
 }
