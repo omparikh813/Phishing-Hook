@@ -53,6 +53,5 @@ Always use personal judgment before clicking links or opening attachments.
 
 ---
 
-If you’d like, I can also:
-- produce a short `README.md` header snippet for the GitHub repo front page, or  
-- generate a concise privacy policy HTML you can host for the Chrome Web Store.
+## Chrome Web Store Link
+https://chromewebstore.google.com/detail/phishing-hook/mndallgeoeekkdmnfoaofpmnfphpakll
